@@ -1,0 +1,19 @@
+{
+  "llama_server": "runtime/llama/llama-server.exe",
+  "llama_port": 18181,
+  "web_port": 8765,
+  "context_size": 8192,
+  "llama_slots": 2,
+  "llama_cache_ram_mb": 0,
+  "gpu_layers": 99,
+  "tts_device": "cuda",
+  "tts_threads": 2,
+  "tts_fast": true,
+  "tts_bert_precision": "float32",
+  "first_chunk_chars": 18,
+  "speech_chunk_chars": 80,
+  "max_tokens": 180,
+  "temperature": 0.3,
+  "history_turns": 2,
+  "system_prompt": "あなたは日本語で話す親切な音声アシスタントです。ユーザーの音声の内容に応答してください。返答は原則として短い一文か二文にしてください。読み上げる文章だけを出力し、Markdown、箇条書き、絵文字、思考過程は使わないでください。聞き取れない場合は聞き返してください。"
+}

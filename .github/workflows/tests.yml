@@ -1,0 +1,20 @@
+name: Tests without model downloads
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install -r requirements-test.txt
+      - run: python -m pytest -q
+      - run: node --test tests/audio_client.test.cjs
+      - run: python scripts/check_public.py
+      - run: git diff --check
