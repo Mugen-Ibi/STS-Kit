@@ -14,6 +14,8 @@ from sts.settings import GEMMA, PROJECTOR, ROOT, settings, resolve_llama_server
 def main():
     os.chdir(ROOT)
     config = settings()
+    from sts.remote import RemoteAccess
+    access = RemoteAccess(config)  # Fail closed before loading models or starting subprocesses.
     config['llama_server'] = str(resolve_llama_server(config['llama_server']))
     slots = int(config.get('llama_slots', 2))
     if slots not in (1, 2):
@@ -72,7 +74,7 @@ def main():
                            "created": psutil.Process(pid).create_time()} for pid in [process.pid, os.getpid()]],
             "started": time.time()}), encoding="utf-8")
         print(f"STS Kit: http://127.0.0.1:{config['web_port']}", flush=True)
-        if "--no-browser" not in __import__("sys").argv:
+        if not access.enabled and "--no-browser" not in __import__("sys").argv:
             import threading
             def open_when_ready():
                 with httpx.Client(trust_env=False, timeout=2) as client:
@@ -85,8 +87,13 @@ def main():
                             pass
                         time.sleep(1)
             threading.Thread(target=open_when_ready, daemon=True).start()
+        if access.enabled:
+            print(f"Remote client: {access.origin} (Tailscale Serve must be configured separately)", flush=True)
         uvicorn.run("sts.app:app", host="127.0.0.1", port=config["web_port"],
-                    ws_max_size=5_500_000, ws_per_message_deflate=False, log_level="info")
+                    ws_max_size=5_500_000, ws_per_message_deflate=False,
+                    log_level="warning" if access.enabled else "info",
+                    proxy_headers=False, access_log=not access.enabled,
+                    ws_ping_interval=20, ws_ping_timeout=20)
     finally:
         cleanup()
 

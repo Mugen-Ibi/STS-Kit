@@ -48,14 +48,15 @@ test('cancelled WebSocket packets cannot restart audio or complete a newer turn'
   for (const [id, value] of Object.entries({engine: 'sbv2', speaker: 'JVNV F1', style: 'Neutral', 'style-weight': '1', speed: '1'})) get(id).value = value;
   const context = vm.createContext({
     document: {getElementById: get, createElement: element},
-    window: {addEventListener() {}}, location: {host: '127.0.0.1:8765'},
+    window: {addEventListener() {}}, location: {host: 'home.example-tailnet.ts.net', protocol: 'https:'},
     performance: {now: () => 1}, setTimeout, clearTimeout,
-    WebSocket: class {static OPEN = 1; readyState = 1; constructor() {sockets.push(this);} send(data) {sent.push(JSON.parse(data));}},
+    WebSocket: class {static OPEN = 1; readyState = 1; constructor(url) {this.url = url; sockets.push(this);} send(data) {sent.push(JSON.parse(data));}},
     AudioContext: class {constructor() {throw new Error('Stale audio must never be played');}},
   });
   vm.runInContext(fs.readFileSync('static/app.js', 'utf8'), context);
   vm.runInContext("healthy = true; scenarioReady = true; send({text: 'hello'}, 'hello');", context);
   const first = sent.at(-1).request_id, socket = sockets[0];
+  assert.equal(socket.url, 'wss://home.example-tailnet.ts.net/ws');
   get('cancel').onclick();
   const deliver = (msg) => socket.onmessage({data: JSON.stringify(msg)});
   deliver({type: 'audio', request_id: first, data: 'stale'});
@@ -71,4 +72,23 @@ test('cancelled WebSocket packets cannot restart audio or complete a newer turn'
   const bubbles = get('conversation').children;
   assert.equal(bubbles.at(-1).children[1].textContent, 'new answer');
   assert.equal(get('send').disabled, true);
+});
+
+
+test('heartbeat loss stops playback and recording before the close handshake completes', () => {
+  const source = fs.readFileSync('static/app.js', 'utf8');
+  const functions = source.slice(source.indexOf('function connectionLost()'), source.indexOf('async function checkHealth()'));
+  let now = 0, beat, stopped = 0, discarded = 0, closed = 0;
+  const context = vm.createContext({
+    performance: {now: () => now}, location: {protocol: 'https:', host: 'home.example-tailnet.ts.net'},
+    setInterval: (fn) => {beat = fn; return 1;}, clearInterval() {},
+    initializeScenario() {}, checkHealth() {}, controls() {},
+    stopPlayback: () => stopped++, finishRecording: (submit) => {assert.equal(submit, false); discarded++;},
+    WebSocket: class {static OPEN = 1; readyState = 1; send() {} close() {closed++;}},
+  });
+  vm.runInContext('let ws, heartbeatTimer, lastPong, activeRequest = 1, healthy = true, scenarioReady = true, scenarioPending = true, busy = true;' + functions + 'connect(); ws.onopen();', context);
+  now = 46000; beat();
+  assert.equal(closed, 1); assert.equal(stopped, 1); assert.equal(discarded, 1);
+  assert.equal(vm.runInContext('healthy || busy || scenarioReady || scenarioPending', context), false);
+  assert.equal(vm.runInContext('activeRequest', context), null);
 });

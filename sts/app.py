@@ -7,10 +7,11 @@ import time
 from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from .remote import AccessMiddleware, RemoteAccess
 from .audio import normalize_wav, take_sentence
 from .settings import ROOT, settings
 from .voice_router import VoiceRouter, ENGINES
@@ -19,6 +20,7 @@ from .context import ContextBudget
 from .pipeline import stream_speech
 
 config = settings()
+access = RemoteAccess(config)
 voice = VoiceRouter()
 pipeline_lock = asyncio.Lock()
 ready = False
@@ -57,7 +59,10 @@ async def lifespan(app):
         ready = True
     except Exception as exc:
         startup_error = str(exc)
-        logging.exception("Voice initialization failed")
+        if access.enabled:
+            logging.error("Voice initialization failed (%s)", type(exc).__name__)
+        else:
+            logging.exception("Voice initialization failed")
     try:
         yield
     finally:
@@ -71,14 +76,7 @@ app = FastAPI(lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 
 
-@app.middleware("http")
-async def local_only(request: Request, call_next):
-    from starlette.responses import PlainTextResponse
-    if request.url.hostname not in {"localhost", "127.0.0.1", "testserver"}:
-        return PlainTextResponse("Invalid host", status_code=403)
-    response = await call_next(request)
-    response.headers["Cache-Control"] = "no-store"
-    return response
+app.add_middleware(AccessMiddleware, policy=access)
 
 
 @app.get("/")
@@ -95,8 +93,11 @@ async def health():
             llm_ready = result.status_code == 200
     except httpx.HTTPError:
         pass
+    error = "Model initialization failed; inspect home host logs." if startup_error else None
     return {"ready": ready and llm_ready, "tts_ready": ready, "llm_ready": llm_ready,
-            "error": startup_error, "styles": voice.styles, "tts_device": config["tts_device"],
+            "error": error if access.enabled else startup_error,
+            "remote_enabled": access.enabled, "transport": "https-wss" if access.enabled else "localhost",
+            "styles": voice.styles, "tts_device": config["tts_device"],
             "engines": voice.catalog(), "active_engine": voice.engine}
 
 
@@ -274,10 +275,6 @@ async def respond(ws, message, history, scenario=None, budget=None):
 
 @app.websocket("/ws")
 async def conversation(ws: WebSocket):
-    allowed = {f"http://localhost:{config['web_port']}", f"http://127.0.0.1:{config['web_port']}"}
-    if ws.headers.get("origin") not in allowed:
-        await ws.close(code=1008)
-        return
     await ws.accept()
     history = []
     scenario = None
@@ -289,12 +286,20 @@ async def conversation(ws: WebSocket):
             async def send_json(self, event):
                 await ws.send_json({**event, 'request_id': message.get('request_id')})
         try:
-            await respond(TaggedSocket(), message, history, scenario, budget)
+            if access.enabled:
+                await asyncio.wait_for(respond(TaggedSocket(), message, history, scenario, budget), access.timeout)
+            else:
+                await respond(TaggedSocket(), message, history, scenario, budget)
         except asyncio.CancelledError:
             raise
+        except asyncio.TimeoutError:
+            await ws.send_json({"type": "error", "text": "Request timed out. Please try again.", 'request_id': message.get('request_id')})
         except Exception as exc:
-            logging.exception("Conversation failed")
-            await ws.send_json({"type": "error", "text": str(exc), 'request_id': message.get('request_id')})
+            if access.enabled:
+                logging.error("Remote conversation failed (%s)", type(exc).__name__)
+            else:
+                logging.exception("Conversation failed")
+            await ws.send_json({"type": "error", "text": "Request failed; check home host diagnostics." if access.enabled else str(exc), 'request_id': message.get('request_id')})
 
     try:
         while True:
@@ -309,7 +314,9 @@ async def conversation(ws: WebSocket):
             except (ValueError, TypeError):
                 await ws.send_json({"type": "error", "text": "入力形式が不正です。"})
                 continue
-            if message.get("type") in {"cancel", "reset"}:
+            if message.get('type') == 'ping':
+                await ws.send_json({'type': 'pong'})
+            elif message.get("type") in {"cancel", "reset"}:
                 if active and not active.done():
                     active.cancel()
                     await asyncio.gather(active, return_exceptions=True)

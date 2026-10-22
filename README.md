@@ -91,3 +91,7 @@ Node.jsはブラウザ音声処理のテストにだけ使い、アプリ実行�
 ## English overview
 
 Local Japanese speech-to-speech and fictional roleplay on Windows. Gemma 4 E2B it handles ASR and dialogue; Style-Bert-VITS2 generates speech. Import a UTF-8 Markdown world, talk to a fictional person in 2030, or disable roleplay for ordinary conversation. Model weights are downloaded separately. The tested platform is Windows with an NVIDIA 8GB GPU; other platforms are not validated. This is turn-based speech with incremental reply playback, not full-duplex streaming. Source license: AGPL v3; model licenses are separate.
+
+## 自宅ホストへの遠隔接続
+
+既定のローカル動作を保ったまま、[Tailscale Serve による opt-in 遠隔モード](docs/TAILSCALE.md)を使えます。HTTPS/WSS、専用トークン、会場側の再接続と診断手順を参照してください。Funnelや公開ポート転送は使いません。

@@ -4,6 +4,7 @@ let scenario = null, scenarioReady = false, scenarioPending = false;
 let requestSequence = 0, activeRequest = null, finishingRecording = false, startingRecording = false;
 let recordingGeneration = 0, flushRecording = null, sentAt = 0, playbackLatency = null;
 const scenarioStorageKey = 'sts-world-v1';
+let heartbeatTimer, lastPong = 0;
 let ws,
   ctx,
   mic,
@@ -147,23 +148,39 @@ async function enqueueAudio(encoded, version) {
     scheduled = scheduled.filter((x) => x !== player);
   };
 }
+function connectionLost() {
+  clearInterval(heartbeatTimer);
+  activeRequest = null;
+  stopPlayback();
+  finishRecording(false);
+  healthy = false;
+  scenarioReady = false;
+  scenarioPending = false;
+  busy = false;
+  controls();
+}
 function connect() {
-  ws = new WebSocket(`ws://${location.host}/ws`);
-  ws.onopen = () => { initializeScenario(); checkHealth(); };
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`);
+  ws.onopen = () => {
+    lastPong = performance.now();
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = setInterval(() => {
+      if (performance.now() - lastPong > 45000) { connectionLost(); ws.close(); return; }
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type: 'ping'}));
+    }, 15000);
+    initializeScenario(); checkHealth();
+  };
   ws.onclose = () => {
-    activeRequest = null;
-    stopPlayback();
-    finishRecording(false);
-    healthy = false;
-    scenarioReady = false;
-    scenarioPending = false;
-    busy = false;
-    controls();
+    connectionLost();
     status("接続が切れました。再接続しています…");
+    // An expired cookie rejects the handshake, so onopen cannot check it.
+    fetch('/api/health', {signal: AbortSignal.timeout(10000)})
+      .then((r) => { if (r.status === 401) location.reload(); }).catch(() => {});
     setTimeout(connect, 2000);
   };
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
+    if (msg.type === 'pong') { lastPong = performance.now(); return; }
     // A cancelled turn can still have packets in flight. Never play or display them.
     if ('request_id' in msg && msg.request_id !== activeRequest) return;
     if (msg.type === 'scenario_applied') {
@@ -221,7 +238,10 @@ function connect() {
 }
 async function checkHealth() {
   try {
-    const h = await (await fetch("/api/health")).json();
+    const response = await fetch("/api/health", {signal: AbortSignal.timeout(10000)});
+    if (response.status === 401) { location.reload(); return; }
+    if (!response.ok) throw new Error('Health check failed');
+    const h = await response.json();
     healthy = h.ready && ws.readyState === WebSocket.OPEN;
     if (healthy) {
       engines = h.engines;
