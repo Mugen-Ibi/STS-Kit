@@ -23,7 +23,7 @@ async def main():
             await asyncio.sleep(1)
         else:
             raise RuntimeError('Server did not become ready')
-    async with websockets.connect('ws://127.0.0.1:8765/ws', origin='http://127.0.0.1:8765', max_size=10000000) as ws:
+    async with websockets.connect('ws://127.0.0.1:8765/ws', origin='http://127.0.0.1:8765', proxy=None, max_size=10000000) as ws:
         for engine in sys.argv[1:] or ['sbv2', 'qwen3', 'lfm', 'sbv2']:
             for repetition in range(2):
                 await ws.send(json.dumps(dict(type='preview', text='こんにちは。今日はいい天気ですね。', engine=engine)))

@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 async def main():
     engine = sys.argv[1] if len(sys.argv) > 1 else 'sbv2'
-    async with connect("ws://127.0.0.1:8765/ws", origin="http://127.0.0.1:8765", max_size=8_000_000) as ws:
+    async with connect("ws://127.0.0.1:8765/ws", origin="http://127.0.0.1:8765", proxy=None, max_size=8_000_000) as ws:
         await ws.send(json.dumps({"type": "message", "audio": "bad base64!"}))
         msg = json.loads(await ws.recv())
         assert msg["type"] == "error", msg

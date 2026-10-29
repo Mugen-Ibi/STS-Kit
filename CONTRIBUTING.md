@@ -12,7 +12,7 @@ node --test tests/audio_client.test.cjs
 python scripts/check_public.py
 ```
 
-Node.js 22でブラウザ音声処理をテストできます。モデルのダウンロードやGPUは不要です。GitHub Actionsでもこの範囲を実行します。
+Node.js 26 LTSでブラウザ音声処理をテストできます。モデルのダウンロードやGPUは不要です。GitHub ActionsではWindows / Linux、Python 3.11 / 3.12でこの範囲を実行します。Linuxでのモデル推論を検証するものではありません。
 
 ## モデルを使う変更
 

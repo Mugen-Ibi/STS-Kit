@@ -97,3 +97,16 @@ def test_context_counts_cached_without_keeping_text():
         assert client.calls == 2
         assert all(isinstance(key, bytes) for key in budget.counts)
     asyncio.run(run())
+
+
+@pytest.mark.parametrize('punctuation', ['、', '，', ',', '：', ':'])
+def test_first_clause_never_exceeds_chunk_limit(punctuation):
+    text = 'あ' * 120 + punctuation + '続き。'
+    head, tail = take_sentence(text, first=True, max_chars=80)
+    assert len(head) <= 80
+    assert head + tail == text
+
+
+def test_first_clause_at_limit_still_emits_early():
+    text = 'あ' * 79 + '、' + '続き'
+    assert take_sentence(text, first=True, max_chars=80) == ('あ' * 79 + '、', '続き')

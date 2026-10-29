@@ -31,7 +31,7 @@ async def main():
         else:
             raise RuntimeError('App not ready')
     results = {}
-    async with connect('ws://127.0.0.1:8765/ws', origin='http://127.0.0.1:8765', max_size=8_000_000) as ws:
+    async with connect('ws://127.0.0.1:8765/ws', origin='http://127.0.0.1:8765', proxy=None, max_size=8_000_000) as ws:
         await apply(ws, default_scenario())
         results['identity'] = await turn(ws, {'text': 'もしもし。あなたのお名前と、今が何年か教えてください。'}, 'roleplay-identity')
         assert '2030' in results['identity']['answer'] and '灯' in results['identity']['answer'], results

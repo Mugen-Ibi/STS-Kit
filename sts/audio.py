@@ -36,7 +36,7 @@ def normalize_wav(data: bytes) -> bytes:
 def take_sentence(buffer: str, final=False, *, first=False, first_min=18, max_chars=100):
     match = re.search(r"[。！？!?\n]", buffer)
     if first:
-        clause = next((m for m in re.finditer(r'[、，,：:]', buffer) if m.end() >= first_min), None)
+        clause = next((m for m in re.finditer(r'[、，,：:]', buffer) if first_min <= m.end() <= max_chars), None)
         if clause and (not match or clause.end() < match.end()):
             return buffer[:clause.end()].strip(), buffer[clause.end():]
     if match and match.end() <= max_chars:

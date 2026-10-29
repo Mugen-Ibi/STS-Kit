@@ -9,6 +9,6 @@ soundfile>=0.12,<1
 scipy>=1.13,<2
 python-multipart>=0.0.20
 pytest>=8,<10
-websockets>=14,<17
+websockets>=17,<18
 truststore>=0.10,<1
 psutil>=5.9,<8

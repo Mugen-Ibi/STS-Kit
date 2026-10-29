@@ -42,7 +42,7 @@ async def main():
     if not (ROOT / "run/speech-question.wav").exists():
         subprocess.run([sys.executable, "-X", "utf8", str(ROOT / "scripts/make_fixture.py")], check=True)
     results = {}
-    async with connect("ws://127.0.0.1:8765/ws", origin="http://127.0.0.1:8765", max_size=8_000_000) as ws:
+    async with connect("ws://127.0.0.1:8765/ws", origin="http://127.0.0.1:8765", proxy=None, max_size=8_000_000) as ws:
         results["text"] = await turn(ws, {"text": "こんにちは。日本の首都を一言で教えてください。", "engine": engine}, "text-response")
         print(json.dumps(results["text"], ensure_ascii=False), flush=True)
         await ws.send(json.dumps({"type": "reset"}))

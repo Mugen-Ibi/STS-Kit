@@ -298,15 +298,22 @@ async def conversation(ws: WebSocket):
 
     try:
         while True:
-            raw = await ws.receive_text()
+            packet = await ws.receive()
+            if packet['type'] == 'websocket.disconnect':
+                break
+            raw = packet.get('text')
+            if raw is None:
+                # This protocol accepts JSON text frames only, never raw audio.
+                await ws.close(code=1003)
+                break
             if len(raw) > 5_500_000:
                 await ws.close(code=1009)
                 break
             try:
                 message = json.loads(raw)
-                if not isinstance(message, dict):
+                if not isinstance(message, dict) or not isinstance(message.get("type"), str):
                     raise ValueError()
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, RecursionError):
                 await ws.send_json({"type": "error", "text": "入力形式が不正です。"})
                 continue
             if message.get("type") in {"cancel", "reset"}:

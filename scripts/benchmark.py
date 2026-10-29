@@ -41,7 +41,7 @@ async def request(ws, payload):
 
 async def main(args):
     results = {}
-    async with connect('ws://127.0.0.1:8765/ws', origin='http://127.0.0.1:8765', max_size=8_000_000) as ws:
+    async with connect('ws://127.0.0.1:8765/ws', origin='http://127.0.0.1:8765', proxy=None, max_size=8_000_000) as ws:
         for name, text in [('short', 'こんにちは。今日はいい天気ですね。'),
                            ('long', '2027年の夏は、東日本を中心に猛暑が長引いて、墨田区の商店街で涼み番が始まったのを覚えています。')]:
             await request(ws, dict(type='preview', text=text))
